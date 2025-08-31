@@ -8,21 +8,74 @@
     <!-- Telegram Web Apps SDK (без него внутри Telegram не будет tg.WebApp) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-    <body>
-        <div id="app">
-            <header class="hero">
-                <img class="cover" src="https://placehold.co/600x900?text=Manga+Cover" alt="Manga Cover" />
-                <div class="hero-text">
-                    <h1>Manga Reader</h1>
-                    <p class="subtitle">Лёгкая демо-страница для MiniApp</p>
-                    <button id="readBtn">Читать</button>
-                </div>
-            </header>
-                <section class="about">
-                    <h2>О приложении</h2>
-                    <p>Это простейшая заглушка. Дальше добавим список глав, предзагрузку страниц, ночной режим и т.п.</p>
-                </section>
-            </div>
+   <body>
+<div class="app">
+<div class="container">
+<!-- Catalog -->
+<section id="page-catalog" class="page active">
+<h1>Манга</h1>
+<p class="subtitle">Каталог демо‑титулов</p>
+<div id="catalogGrid" class="catalog-grid"></div>
+</section>
+
+
+<!-- Profile -->
+<section id="page-profile" class="page">
+<div class="profile-header">
+<div class="avatar"></div>
+<div>
+<div class="profile-name">Гость</div>
+<div class="subtitle">Добро пожаловать 👋</div>
+</div>
+</div>
+<div class="stats">
+<div class="stat"><div class="num" id="stChapters">0</div><div class="subtitle">Глав</div></div>
+<div class="stat"><div class="num" id="stFav">0</div><div class="subtitle">Избранное</div></div>
+<div class="stat"><div class="num" id="stTime">0 ч</div><div class="subtitle">Время</div></div>
+</div>
+<h2>Избранное</h2>
+<div id="favRow" class="row-scroll"></div>
+</section>
+
+
+<!-- Detail -->
+<section id="page-detail" class="page">
+<div class="detail-hero">
+<img id="dCover" alt="cover" />
+<div>
+<div id="dTitle" class="detail-title">—</div>
+<div id="dDesc" class="detail-desc">—</div>
+<div class="actions">
+<button id="btnRead" class="btn primary">Читать</button>
+<button id="btnFav" class="btn ghost">Избранное</button>
+</div>
+</div>
+</div>
+<h2 style="margin-top:14px">Главы</h2>
+<div id="chapters" class="chapters"></div>
+</section>
+</div>
+
+
+<!-- TABS -->
+<nav class="tabs">
+<div class="inner">
+<button data-tab="catalog" class="tab-btn active" aria-label="Каталог">
+<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6zm8 0a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V6z"/></svg>
+<span>Каталог</span>
+</button>
+<button data-tab="profile" class="tab-btn" aria-label="Профиль">
+<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-5 0-9 2.5-9 5.5A1.5 1.5 0 0 0 4.5 21h15A1.5 1.5 0 0 0 21 19.5C21 16.5 17 14 12 14z"/></svg>
+<span>Профиль</span>
+</button>
+<button data-tab="favorites" class="tab-btn" aria-label="Избранное" id="tabFav">
+<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.4-7-10a4.5 4.5 0 0 1 8-2.7A4.5 4.5 0 0 1 19 11c0 5.6-7 10-7 10z"/></svg>
+<span>Избранное</span>
+</button>
+</div>
+</nav>
+</div>
             <script src="script.js"></script>
     </body>
+
 </html>
