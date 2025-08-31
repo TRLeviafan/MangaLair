@@ -1,77 +1,87 @@
-// Manga MiniApp — v1 (перепроверено, разделено на файлы)
-// Инициализация после загрузки DOM
+// Manga MiniApp — manifest mode
 document.addEventListener('DOMContentLoaded', () => {
-  // Поддержка Telegram WebApp (безопасно, если открыто в браузере)
   const tg = window.Telegram?.WebApp;
   if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
 
-  // ====== ДАННЫЕ (демо) ======
-  const MANGA = [
-    { id:'luna',   title:'Лунный город',    desc:'Таинственный город, где луна освещает путь.', chapters: 12 },
-    { id:'dawn',   title:'Сады рассвета',   desc:'История о поиске света.',                     chapters: 9  },
-    { id:'desert', title:'Песочный мир',    desc:'Приключения в багровых дюнах.',               chapters: 14 },
-    { id:'troll',  title:'Березовая тропа', desc:'Дорога через северные леса.',                 chapters: 8  },
-    { id:'sky',    title:'Опаловая сказка', desc:'Небеса в оттенках опала.',                    chapters: 6  },
-    { id:'star',   title:'Звезда за холмом',desc:'Одна звезда — тысяча дорог.',                 chapters: 10 },
-  ];
-  const coverUrl = (title) => `https://placehold.co/600x800/png?text=${encodeURIComponent(title)}`;
-  const pageUrl  = (id, chapter, i) => `https://placehold.co/900x1300/png?text=${encodeURIComponent(id)}+Ch${chapter}+P${i}`;
+  // ====== helpers ======
+  const qs = (s, r=document) => r.querySelector(s);
+  const qsa= (s, r=document) => [...r.querySelectorAll(s)];
+  const throttle = (fn, ms)=>{ let t=0; return (...a)=>{ const now=Date.now(); if(now-t>ms){ t=now; fn(...a); } } };
+  const toast = (text)=>{ const el=document.createElement('div'); el.textContent=text;
+    Object.assign(el.style,{position:'fixed',left:'50%',bottom:'calc(90px + var(--safe-bottom))',transform:'translateX(-50%)',background:'rgba(23,26,34,.95)',border:'1px solid var(--stroke)',color:'var(--text)',padding:'10px 14px',borderRadius:'12px',zIndex:40});
+    document.body.appendChild(el); setTimeout(()=> el.remove(), 1500);
+  };
+  const setText = (sel, v)=>{ const el=qs(sel); if(el) el.textContent=v; };
 
-  // ====== СОСТОЯНИЕ ======
+  // ====== state ======
   const K = { fav:'manga:fav', read:'manga:read', time:'manga:time', progress:'manga:progress' };
   const state = {
     favorites: new Set(JSON.parse(localStorage.getItem(K.fav) || '[]')),
-    read: JSON.parse(localStorage.getItem(K.read) || '{}'),            // {id:[1,2]}
+    read: JSON.parse(localStorage.getItem(K.read) || '{}'),
     time: Number(localStorage.getItem(K.time) || '0'),
-    progress: JSON.parse(localStorage.getItem(K.progress) || '{}'),    // {id:{chapter:number,page:number}}
+    progress: JSON.parse(localStorage.getItem(K.progress) || '{}'), // {id:{chapterIndex:number,page:number}}
     currentId: null,
+    data: { projects: [] }, // manifest data
   };
   const saveFav = () => localStorage.setItem(K.fav, JSON.stringify([...state.favorites]));
   const saveRead = () => localStorage.setItem(K.read, JSON.stringify(state.read));
   const saveProg = () => localStorage.setItem(K.progress, JSON.stringify(state.progress));
 
-  // ====== УТИЛИТЫ ======
-  const qs  = (s, r=document) => r.querySelector(s);
-  const qsa = (s, r=document) => [...r.querySelectorAll(s)];
-  const throttle = (fn, ms)=>{ let t=0; return (...a)=>{ const now=Date.now(); if(now-t>ms){ t=now; fn(...a); } } };
-  const toast = (text)=>{
-    const el = document.createElement('div');
-    el.textContent = text;
-    Object.assign(el.style,{position:'fixed',left:'50%',bottom:'calc(90px + var(--safe-bottom))',transform:'translateX(-50%)',background:'rgba(23,26,34,.95)',border:'1px solid var(--stroke)',color:'var(--text)',padding:'10px 14px',borderRadius:'12px',zIndex:40});
-    document.body.appendChild(el); setTimeout(()=> el.remove(), 1500);
-  };
+  // ====== loading manifest ======
+  fetch('projects.json', {cache:'no-cache'})
+    .then(r => r.ok ? r.json() : Promise.reject('no manifest'))
+    .then(json => { state.data = json || {projects:[]}; init(); })
+    .catch(_ => { state.data = {projects:[]}; init(); });
 
-  // ====== КАТАЛОГ ======
+  function init(){
+    renderCatalog();
+    renderProfile();
+    bindTabs();
+  }
+
+  // ====== catalog ======
   function renderCatalog(){
     const grid = qs('#catalogGrid'); grid.innerHTML = '';
-    MANGA.forEach(m => {
+
+    const projects = state.data.projects;
+    if (projects.length === 0){
+      const empty = document.createElement('div');
+      empty.style.color = 'var(--muted)';
+      empty.innerHTML = 'Пока нет проектов. <br/>Добавь папки в <code>/projects</code> и сгенерируй <code>projects.json</code>.';
+      grid.appendChild(empty);
+      return;
+    }
+
+    projects.forEach(p => {
       const card = document.createElement('div');
       card.className = 'card';
-      card.innerHTML = `<img class="cover" loading="lazy" src="${coverUrl(m.title)}" alt="${m.title}"><div class="title">${m.title}</div>`;
-      card.onclick = () => openDetail(m.id);
+      const cover = p.cover || 'https://placehold.co/600x800/png?text=' + encodeURIComponent(p.title);
+      card.innerHTML = `<img class="cover" loading="lazy" src="${cover}" alt="${p.title}"><div class="title">${p.title}</div>`;
+      card.onclick = () => openDetail(p.id);
       grid.appendChild(card);
     });
   }
 
-  // ====== ПРОФИЛЬ ======
+  // ====== profile ======
   function renderProfile(){
     const totalRead = Object.values(state.read).reduce((a,arr)=>a+arr.length,0);
-    qs('#stChapters').textContent = totalRead;
-    qs('#stFav').textContent      = state.favorites.size;
-    qs('#stTime').textContent     = state.time + ' ч';
+    setText('#stChapters', totalRead);
+    setText('#stFav', state.favorites.size);
+    setText('#stTime', state.time + ' ч');
     const favRow = qs('#favRow'); favRow.innerHTML = '';
     [...state.favorites]
-      .map(id => MANGA.find(m=>m.id===id)).filter(Boolean)
-      .forEach(m => {
+      .map(id => state.data.projects.find(p=>p.id===id)).filter(Boolean)
+      .forEach(p => {
         const el = document.createElement('div');
         el.className = 'fav-card';
-        el.innerHTML = `<img src="${coverUrl(m.title)}" alt="${m.title}"><div class="t">${m.title}</div>`;
-        el.onclick = () => openDetail(m.id);
+        const cover = p.cover || 'https://placehold.co/600x800/png?text=' + encodeURIComponent(p.title);
+        el.innerHTML = `<img src="${cover}" alt="${p.title}"><div class="t">${p.title}</div>`;
+        el.onclick = () => openDetail(p.id);
         favRow.appendChild(el);
       });
   }
 
-  // ====== ДЕТАЛКА ======
+  // ====== detail ======
   function setFavButton(btn, isFav){
     btn.textContent = isFav ? 'В избранном' : 'Избранное';
     btn.className = 'btn ghost';
@@ -81,57 +91,65 @@ document.addEventListener('DOMContentLoaded', () => {
     saveFav(); setFavButton(qs('#btnFav'), state.favorites.has(id)); renderProfile();
   }
   function openDetail(id){
-    state.currentId = id; const m = MANGA.find(x=>x.id===id); if(!m) return;
-    qs('#dCover').src = coverUrl(m.title);
-    qs('#dTitle').textContent = m.title;
-    qs('#dDesc').textContent  = m.desc;
+    state.currentId = id;
+    const p = state.data.projects.find(x=>x.id===id); if(!p) return;
+    qs('#dCover').src = p.cover || ('https://placehold.co/600x800/png?text=' + encodeURIComponent(p.title));
+    setText('#dTitle', p.title);
+    setText('#dDesc', p.desc || '');
     const btnFav = qs('#btnFav'); setFavButton(btnFav, state.favorites.has(id)); btnFav.onclick = () => toggleFavorite(id);
+
     const btnRead = qs('#btnRead'); btnRead.onclick = () => {
       const prog = state.progress[id];
-      if(prog) openReader(id, prog.chapter);
+      const chList = p.chapters || [];
+      if(!chList.length){ toast('Нет глав'); return; }
+      if(prog) openReader(id, prog.chapterIndex);
       else {
-        const setCh = new Set(state.read[id]||[]);
-        let chapter = 1; for(let i=1;i<=m.chapters;i++){ if(!setCh.has(i)){ chapter = i; break; } }
-        openReader(id, chapter);
+        // найдём первую непрочитанную главу по индексу
+        const readSet = new Set(state.read[id]||[]);
+        let idx = 1; for(let i=1;i<=chList.length;i++){ if(!readSet.has(i)){ idx = i; break; } }
+        openReader(id, idx);
       }
     };
-    const ch = qs('#chapters'); ch.innerHTML = '';
-    for(let i=1;i<=m.chapters;i++){
-      const isRead = (state.read[id]||[]).includes(i);
-      const it = document.createElement('div'); it.className = 'ch-item';
-      it.innerHTML = `<div>${isRead ? '✔️ ' : ''}Глава ${i}</div><div class="arrow">›</div>`;
-      it.onclick = () => openReader(id, i);
-      ch.appendChild(it);
-    }
+
+    const chWrap = qs('#chapters'); chWrap.innerHTML = '';
+    const readSet = new Set(state.read[id]||[]);
+    (p.chapters || []).forEach((ch, i) => {
+      const index = i+1;
+      const isRead = readSet.has(index);
+      const row = document.createElement('div'); row.className = 'ch-item';
+      row.innerHTML = `<div>${isRead ? '✔️ ' : ''}${ch.title || ('Глава ' + index)}</div><div class="arrow">›</div>`;
+      row.onclick = () => openReader(id, index);
+      chWrap.appendChild(row);
+    });
+
     goto('detail');
   }
 
-  // ====== РИДЕР ======
-  const READER = { id:null, chapter:1, pages:[], pageIndex:1 };
-  function openReader(id, chapter){
-    const m = MANGA.find(x=>x.id===id); if(!m) return;
-    READER.id = id; READER.chapter = chapter;
+  // ====== reader ======
+  const READER = { id:null, chapterIndex:1, pages:[], pageIndex:1 };
+  function openReader(id, chapterIndex){
+    const p = state.data.projects.find(x=>x.id===id); if(!p) return;
+    const ch = (p.chapters || [])[chapterIndex-1]; if(!ch){ toast('Глава не найдена'); return; }
+
+    READER.id = id; READER.chapterIndex = chapterIndex; READER.pages = ch.pages;
+
     const vp = qs('#readerViewport'); vp.innerHTML = '';
-    const pageCount = Math.max(8, Math.min(18, 10 + (chapter%5)));
-    READER.pages = Array.from({length:pageCount}, (_,i)=> pageUrl(id, chapter, i+1));
-    READER.pages.forEach((src, i) => {
+    (READER.pages || []).forEach((src, i) => {
       const img = document.createElement('img');
       img.className = 'page-img'; img.loading = 'lazy'; img.src = src; img.dataset.index = String(i+1);
       vp.appendChild(img);
     });
-    const prog = (state.progress[id] && state.progress[id].chapter === chapter) ? state.progress[id].page : 1;
+    const prog = (state.progress[id] && state.progress[id].chapterIndex === chapterIndex) ? state.progress[id].page : 1;
     READER.pageIndex = Math.min(Math.max(1, prog), READER.pages.length);
-    qs('#readerTitle').textContent = `${m.title} — Глава ${chapter}`;
+    setText('#readerTitle', `${p.title} — ${ch.title || ('Глава ' + chapterIndex)}`);
     updateProgressLabel();
-    // handlers
     qs('#btnBackDetail').onclick = () => { goto('detail'); openDetail(id); };
     qs('#btnPrev').onclick = () => jump(-1);
     qs('#btnNext').onclick = () => jump(1);
     qs('#btnMode').onclick = () => alert('Горизонтальный режим добавим позже.');
-    qs('#btnMarkRead').onclick = () => { markChapterRead(id, chapter, true); };
+    qs('#btnMarkRead').onclick = () => { markChapterRead(id, chapterIndex, true); };
     vp.onscroll = throttle(updateCurrentPageFromScroll, 120);
     goto('reader');
-    // скроллим к сохранённой
     requestAnimationFrame(() => scrollToPage(READER.pageIndex, false));
   }
   function scrollToPage(index, smooth=true){
@@ -139,9 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const img = qs(`.page-img[data-index="${index}"]`, vp); if(!img) return;
     img.scrollIntoView({behavior: smooth ? 'smooth' : 'auto', block:'start'});
   }
-  function updateProgressLabel(){
-    qs('#readerProgress').textContent = `${READER.pageIndex} / ${READER.pages.length}`;
-  }
+  function updateProgressLabel(){ setText('#readerProgress', `${READER.pageIndex} / ${READER.pages.length}`); }
   function jump(dir){
     const next = Math.max(1, Math.min(READER.pages.length, READER.pageIndex + dir));
     if (next === READER.pageIndex) return;
@@ -159,46 +175,42 @@ document.addEventListener('DOMContentLoaded', () => {
       const y = img.offsetTop; const delta = Math.abs(y - (top + vh*0.2));
       if(delta < bestDelta){ bestDelta = delta; bestIndex = Number(img.dataset.index); }
     });
-    if(bestIndex !== READER.pageIndex){
-      READER.pageIndex = bestIndex; updateProgressLabel(); saveProgress();
-    }
+    if(bestIndex !== READER.pageIndex){ READER.pageIndex = bestIndex; updateProgressLabel(); saveProgress(); }
     const nearEnd = (vp.scrollTop + vh) > (vp.scrollHeight - 40);
-    if(nearEnd) markChapterRead(READER.id, READER.chapter, true, false);
+    if(nearEnd) markChapterRead(READER.id, READER.chapterIndex, true, false);
   }
   function saveProgress(){
-    state.progress[READER.id] = { chapter: READER.chapter, page: READER.pageIndex };
+    state.progress[READER.id] = { chapterIndex: READER.chapterIndex, page: READER.pageIndex };
     saveProg();
   }
-  function markChapterRead(id, chapter, set=true, notify=true){
+  function markChapterRead(id, chapterIndex, set=true, notify=true){
     const setCh = new Set(state.read[id]||[]);
-    if(set) setCh.add(chapter); else setCh.delete(chapter);
+    if(set) setCh.add(chapterIndex); else setCh.delete(chapterIndex);
     state.read[id] = [...setCh]; saveRead(); renderProfile();
     if(notify){ toast(set ? 'Глава отмечена как прочитанная' : 'Снята отметка прочтения'); }
     if(qs('#page-detail').classList.contains('active')) openDetail(id);
   }
   function tryMarkEndAndSuggestNext(){
-    const m = MANGA.find(x=>x.id===READER.id);
-    markChapterRead(READER.id, READER.chapter, true, false);
-    if(m && READER.chapter < m.chapters){
+    const p = state.data.projects.find(x=>x.id===READER.id);
+    markChapterRead(READER.id, READER.chapterIndex, true, false);
+    if(p && READER.chapterIndex < (p.chapters||[]).length){
       toast('Глава завершена. Открываем следующую…');
-      setTimeout(()=> openReader(READER.id, READER.chapter + 1), 600);
+      setTimeout(()=> openReader(READER.id, READER.chapterIndex + 1), 600);
     }
   }
 
-  // ====== НАВИГАЦИЯ ======
+  // ====== nav ======
   function goto(name){
     qsa('.page').forEach(p=>p.classList.remove('active'));
     const page = qs(`#page-${name}`); if(page) page.classList.add('active');
     qsa('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name || (name==='detail' && b.dataset.tab==='catalog')));
     const container = qs('.container'); if(container) container.scrollTo({top:0, behavior:'auto'});
   }
-  qsa('.tab-btn').forEach(btn => btn.addEventListener('click', () => {
-    const t = btn.dataset.tab;
-    if(t==='favorites'){ goto('profile'); qs('#favRow').scrollIntoView({behavior:'smooth',block:'start'}); }
-    else { goto(t); }
-  }));
-
-  // ====== СТАРТ ======
-  renderCatalog();
-  renderProfile();
+  function bindTabs(){
+    qsa('.tab-btn').forEach(btn => btn.addEventListener('click', () => {
+      const t = btn.dataset.tab;
+      if(t==='favorites'){ goto('profile'); qs('#favRow').scrollIntoView({behavior:'smooth',block:'start'}); }
+      else { goto(t); }
+    }));
+  }
 });
